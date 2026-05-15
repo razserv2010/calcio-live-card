@@ -73,10 +73,10 @@ const TRANSLATIONS = {
     'team.unknown_entity': 'Unknown entity',
 
     // Time relative
-    'time.today': 'Today',
-    'time.yesterday': 'Yesterday',
-    'time.tomorrow': 'Tomorrow',
-    'time.now': 'now',
+    'time.today': 'היום',
+    'time.yesterday': 'אתמול',
+    'time.tomorrow': 'מחר',
+    'time.now': 'עכשיו',
     'time.in_n_min': 'in {n} min',
     'time.in_n_h': 'in {n} h',
     'time.in_n_d': 'in {n} d',

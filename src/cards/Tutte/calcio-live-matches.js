@@ -13,6 +13,8 @@ class CalcioLiveTodayMatchesCard extends LitElement {
       _toastMessage: { type: String },
       _toastVisible: { type: Boolean },
       _toastVariant: { type: String },
+      // --- תזכורות ---
+      _reminders: { type: Object },
     };
   }
 
@@ -24,6 +26,8 @@ class CalcioLiveTodayMatchesCard extends LitElement {
     this._toastVisible = false;
     this._toastVariant = 'goal';
     this._toastTimer = null;
+    // --- תזכורות ---
+    this._reminders = new Set();
   }
 
   setConfig(config) {
@@ -130,6 +134,65 @@ class CalcioLiveTodayMatchesCard extends LitElement {
     }, 4000);
     this.requestUpdate();
   }
+
+  // ===== תזכורות =====
+
+  _loadReminders(state) {
+    if (!state || state === 'unknown' || state === '') {
+      this._reminders = new Set();
+    } else {
+      this._reminders = new Set(state.split(',').map(s => s.trim()).filter(Boolean));
+    }
+  }
+
+  async _toggleReminder(e, match) {
+    e.stopPropagation();
+    const id = match.id || `${match.home_team}_${match.away_team}`;
+    const current = new Set(this._reminders);
+
+    if (current.has(id)) {
+      current.delete(id);
+    } else {
+      current.add(id);
+    }
+
+    const value = Array.from(current).join(',');
+
+    await this.hass.callService('input_text', 'set_value', {
+      entity_id: 'input_text.calcio_live_reminders',
+      value: value,
+    });
+
+    this._reminders = current;
+    this.requestUpdate();
+
+    const has = current.has(id);
+    this._showReminderToast(
+      has
+        ? `🔔 תזכורת נקבעה!\n${match.home_team} נגד ${match.away_team}\n60 / 30 / 10 דק׳ לפני`
+        : `🔕 תזכורת בוטלה\n${match.home_team} נגד ${match.away_team}`,
+      has ? '#22c55e' : '#ef4444'
+    );
+  }
+
+  _showReminderToast(msg, color) {
+    const toast = document.createElement('div');
+    toast.style.cssText = `
+      position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+      background:${color};color:white;
+      padding:12px 20px;border-radius:12px;
+      font-size:13px;font-weight:600;
+      z-index:99999;direction:rtl;text-align:center;
+      box-shadow:0 4px 20px rgba(0,0,0,0.3);
+      max-width:280px;line-height:1.6;
+      white-space:pre-line;
+    `;
+    toast.textContent = msg;
+    document.body.appendChild(toast);
+    setTimeout(() => toast.remove(), 3000);
+  }
+
+  // ===== סוף תזכורות =====
 
   getCardSize() { return 4; }
   static getConfigElement() { return document.createElement("calcio-live-matches-editor"); }
@@ -249,6 +312,19 @@ class CalcioLiveTodayMatchesCard extends LitElement {
     return text;
   }
 
+  set hass(hass) {
+    this._hass = hass;
+    // טען תזכורות מה-input_text
+    const remindersState = hass.states['input_text.calcio_live_reminders']?.state || '';
+    this._loadReminders(remindersState);
+    // קרא ל-super כדי ש-LitElement יעדכן
+    super.hass = hass;
+  }
+
+  get hass() {
+    return this._hass;
+  }
+
   render() {
     if (!this.hass || !this._config) return html``;
     const entityId = this._config.entity;
@@ -323,6 +399,10 @@ class CalcioLiveTodayMatchesCard extends LitElement {
             ${group.matches.map(match => {
               const matchKey = `${match.home_team}_${match.away_team}`;
               const isLive = match.state === 'in';
+              const isDone = match.state === 'post';
+              const canRemind = !isLive && !isDone;
+              const matchId = match.id || matchKey;
+              const hasReminder = this._reminders.has(matchId);
               const recent = this._recentEventMatches.get(matchKey);
               const homeWinner = this._isWinner(match, 'home');
               const awayWinner = this._isWinner(match, 'away');
@@ -331,7 +411,7 @@ class CalcioLiveTodayMatchesCard extends LitElement {
               return html`
                 <div class="match-row ${isLive ? 'live' : ''} ${recent === 'goal' ? 'goal-pulse' : ''} ${recent === 'card' ? 'card-pulse' : ''}"
                      @click="${() => this.showDetails(match)}">
-                  <div class="match-time ${isLive ? 'live-time' : ''} ${match.state === 'post' ? 'ft' : ''}">
+                  <div class="match-time ${isLive ? 'live-time' : ''} ${isDone ? 'ft' : ''}">
                     ${this._matchTimeLabel(match)}
                   </div>
                   <div class="match-teams">
@@ -354,7 +434,15 @@ class CalcioLiveTodayMatchesCard extends LitElement {
                       </div>
                     ` : ''}
                   </div>
-                  <div class="match-status-icon">›</div>
+                  <div class="match-actions">
+                    ${canRemind ? html`
+                      <button
+                        class="remind-btn ${hasReminder ? 'active' : ''}"
+                        title="${hasReminder ? 'בטל תזכורת' : 'הגדר תזכורת'}"
+                        @click="${(e) => this._toggleReminder(e, match)}"
+                      >${hasReminder ? '🔔' : '🔕'}</button>
+                    ` : html`<div class="match-status-icon">›</div>`}
+                  </div>
                 </div>
               `;
             })}
@@ -662,6 +750,13 @@ class CalcioLiveTodayMatchesCard extends LitElement {
         letter-spacing: 0.04em;
       }
       .tv-chip svg { width: 10px; height: 10px; }
+
+      /* match-actions: עמודת הפעולות (תזכורת / חץ) */
+      .match-actions {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
       .match-status-icon {
         color: var(--secondary-text-color);
         font-size: 18px;
@@ -672,6 +767,35 @@ class CalcioLiveTodayMatchesCard extends LitElement {
         color: var(--cl-accent);
         opacity: 1;
         transform: translateX(3px);
+      }
+
+      /* ===== כפתור תזכורת ===== */
+      .remind-btn {
+        background: none;
+        border: 1px solid rgba(167,139,250,0.2);
+        border-radius: 50%;
+        width: 32px;
+        height: 32px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 15px;
+        cursor: pointer;
+        opacity: 0.35;
+        transition: opacity 0.2s, background 0.2s, transform 0.1s;
+        flex-shrink: 0;
+      }
+      .remind-btn.active {
+        opacity: 1;
+        background: rgba(167,139,250,0.12);
+        border-color: rgba(167,139,250,0.4);
+      }
+      .remind-btn:hover {
+        opacity: 1;
+        background: rgba(167,139,250,0.15);
+      }
+      .remind-btn:active {
+        transform: scale(0.9);
       }
 
       /* Toast */

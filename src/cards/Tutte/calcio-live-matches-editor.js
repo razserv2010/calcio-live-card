@@ -6,12 +6,14 @@ class CalcioLiveTodayMatchesEditor extends LitElement {
       _config: { type: Object },
       hass: { type: Object },
       entities: { type: Array },
+      reminderEntities: { type: Array },
     };
   }
 
   constructor() {
     super();
     this.entities = [];
+    this.reminderEntities = [];
   }
 
   static get styles() {
@@ -62,7 +64,7 @@ class CalcioLiveTodayMatchesEditor extends LitElement {
       .hint {
         font-size: 12px;
         color: var(--secondary-text-color);
-        margin-top: -4px;
+        margin-top: 4px;
       }
     `;
   }
@@ -93,6 +95,13 @@ class CalcioLiveTodayMatchesEditor extends LitElement {
     const value = ev.target.value;
     if (value === this._config.entity) return;
     this._fireConfigChanged({ ...this._config, entity: value });
+  }
+
+  _reminderEntityChanged(ev) {
+    if (!this._config) return;
+    const value = ev.target.value;
+    if (value === this._config.reminder_entity) return;
+    this._fireConfigChanged({ ...this._config, reminder_entity: value });
   }
 
   _switchChanged(ev) {
@@ -131,12 +140,17 @@ class CalcioLiveTodayMatchesEditor extends LitElement {
     this.entities = Object.keys(this.hass.states)
       .filter((entityId) => entityId.startsWith('sensor.calciolive_all'))
       .sort();
+    this.reminderEntities = Object.keys(this.hass.states)
+      .filter((entityId) => entityId.startsWith('input_text.'))
+      .sort();
   }
 
   render() {
     if (!this._config || !this.hass) return html``;
     const currentEntity = this._config.entity || '';
     const entityInList = currentEntity && this.entities.includes(currentEntity);
+    const currentReminder = this._config.reminder_entity || 'input_text.calcio_live_reminders';
+    const reminderInList = this.reminderEntities.includes(currentReminder);
 
     return html`
       <div class="card-config">
@@ -216,6 +230,7 @@ class CalcioLiveTodayMatchesEditor extends LitElement {
           />
           <div class="hint">Per funzionare, "Show Finished Matches" deve essere attivo.</div>
         </div>
+
         <div>
           <label class="field-label">Language · Lingua</label>
           <select data-config-value="language" @change=${this._selectChanged}>
@@ -226,6 +241,18 @@ class CalcioLiveTodayMatchesEditor extends LitElement {
             <option value="es" ?selected=${this._config.language === 'es'}>Español</option>
             <option value="nl" ?selected=${this._config.language === 'nl'}>Nederlands</option>
           </select>
+        </div>
+
+        <h3>🔔 תזכורות</h3>
+        <div>
+          <label class="field-label">Reminder Entity (input_text)</label>
+          <select @change=${this._reminderEntityChanged}>
+            ${!reminderInList ? html`<option value="${currentReminder}" selected>${currentReminder}</option>` : ''}
+            ${this.reminderEntities.map(e => html`
+              <option value="${e}" ?selected=${e === currentReminder}>${e}</option>
+            `)}
+          </select>
+          <div class="hint">יש ליצור input_text ב-HA לשמירת התזכורות. ברירת מחדל: input_text.calcio_live_reminders</div>
         </div>
       </div>
     `;

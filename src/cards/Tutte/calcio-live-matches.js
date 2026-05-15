@@ -159,7 +159,7 @@ class CalcioLiveTodayMatchesCard extends LitElement {
     const value = Array.from(current).join(',');
 
     await this.hass.callService('input_text', 'set_value', {
-      entity_id: 'input_text.calcio_live_reminders',
+      entity_id: this._config?.reminder_entity || 'input_text.calcio_live_reminders',
       value: value,
     });
 
@@ -315,7 +315,8 @@ class CalcioLiveTodayMatchesCard extends LitElement {
   set hass(hass) {
     this._hass = hass;
     // טען תזכורות מה-input_text
-    const remindersState = hass.states['input_text.calcio_live_reminders']?.state || '';
+    const reminderEntityId = this._config?.reminder_entity || 'input_text.calcio_live_reminders';
+    const remindersState = hass.states[reminderEntityId]?.state || '';
     this._loadReminders(remindersState);
     // קרא ל-super כדי ש-LitElement יעדכן
     super.hass = hass;
